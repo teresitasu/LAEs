@@ -73,35 +73,37 @@ xilLG = zeros(lenz,lenr);
 xilGG = zeros(lenz,lenr);
 Yk_nsn = zeros(5,lenr);
 xilGG_nsn = zeros(lenz,lenr);
+aa = 10;
 for iz = 1:lenz
     if(lorder==0)
         Pk_LL_z(1,:) = PkLAE0(iz,:);
         Pk_LG_z(1,:) = PkLAEG0(iz,:);
         Pk_GG_z(1,:) = Pk0_LAE(iz,:) - PkLAE0(iz,:) - PkLAEG0(iz,:);
         Pk_GG_nsn_z(1,:) = Pk0_LAE_nsn(iz,:) - PkLAE0(iz,:) - PkLAEG0(iz,:);
-        fprintf('lenr %f %f %f %f \n',Pk_LL_z(1),Pk_LG_z(1),Pk_GG_z(1),Pk_GG_nsn_z(1));
+        fprintf('Pk_GG_z %e %e %e \n',Pk0_LAE(aa),PkLAE0(aa),PkLAEG0(aa));
+        fprintf('pkl %e %e %e %e \n',Pk_LL_z(aa),Pk_LG_z(aa),Pk_GG_z(aa),Pk_GG_nsn_z(aa));
     end
     if(lorder==2)
         Pk_LL_z(1,:) = PkLAE2(iz,:);
         Pk_LG_z(1,:) = PkLAEG2(iz,:);
         Pk_GG_z(1,:) = Pk2_LAE(iz,:) - PkLAE2(iz,:) - PkLAEG2(iz,:);
         Pk_GG_nsn_z(1,:) = Pk2_LAE_nsn(iz,:) - PkLAE2(iz,:) - PkLAEG2(iz,:);
-        fprintf('lenr %f %f %f %f \n',Pk_LL_z(1),Pk_LG_z(1),Pk_GG_z(1),Pk_GG_nsn_z(1));
-        fprintf('lenr %f %f %f %f \n',PkLAE2(1),PkLAEG2(1),Pk2_LAE(1),Pk2_LAE_nsn(1));
+        fprintf('Pk_GG_z %e %e %e \n',Pk2_LAE(aa),PkLAE2(aa),PkLAEG2(aa));
+        fprintf('pkl %e %e %e %e \n',Pk_LL_z(aa),Pk_LG_z(aa),Pk_GG_z(aa),Pk_GG_nsn_z(aa));
     end
     if(lorder==4)
         Pk_LL_z(1,:) = PkLAE4(iz,:);
         Pk_LG_z(1,:) = PkLAEG4(iz,:);
         Pk_GG_z(1,:) = Pk4_LAE(iz,:) - PkLAE4(iz,:) - PkLAEG4(iz,:);
         Pk_GG_nsn_z(1,:) = Pk4_LAE_nsn(iz,:) - PkLAE4(iz,:) - PkLAEG4(iz,:);
-        fprintf('lenr %f %f %f %f \n',Pk_LL_z(1),Pk_LG_z(1),Pk_GG_z(1),Pk_GG_nsn_z(1));
+        fprintf('Pk_GG_z %e %e %e \n',Pk4_LAE(aa),PkLAE4(aa),PkLAEG4(aa));
+        fprintf('pkl %e %e %e %e \n',Pk_LL_z(aa),Pk_LG_z(aa),Pk_GG_z(aa),Pk_GG_nsn_z(aa));
     end
     YkLL = LyATransXilInt_fft(fk,fkk,Pk_LL_z,lorder);
     YkLG = LyATransXilInt_fft(fk,fkk,Pk_LG_z,lorder);
     YkGG = LyATransXilInt_fft(fk,fkk,Pk_GG_z,lorder);
     YkGG_nsn = LyATransXilInt_fft(fk,fkk,Pk_GG_nsn_z,lorder);
 
-    aa = 400;
     fprintf('YKll %e %e %e %e \n',YkLL(1,aa),YkLG(1,aa),YkGG(1,aa),YkGG_nsn(1,aa));
 
 
@@ -126,7 +128,6 @@ for iz = 1:lenz
         Yr = ifft(Yk1)/ drad;
         Yr(maskrp) = Yr(maskrp)./ rad(maskrp);
         xilGG_nsn(iz,:) = imag(Yr(:));
-        aa = 400;
         fprintf('xill %e %e %e %e \n',xilLL(aa),xilLG(aa),xilGG(aa),xilGG_nsn(aa));
     end
     if(lorder==2)
@@ -179,6 +180,7 @@ for iz = 1:lenz
         Yr3 = -ifft(Yk3)/ drad;
         Yr3(maskrp) = Yr3(maskrp)./ (rad(maskrp).*rad(maskrp));
         xilGG_nsn(iz,:) = imag(Yr1(:) + Yr2(:)) + real(Yr3(:));
+        fprintf('xill %e %e %e %e \n',xilLL(aa),xilLG(aa),xilGG(aa),xilGG_nsn(aa));
     end
     if(lorder==4)
         Yk1(1,:) = YkLL(1,:);
@@ -260,6 +262,7 @@ for iz = 1:lenz
         Yr5 = ifft(Yk5)/ drad;
         Yr5(maskrp) = Yr5(maskrp)./ rad(maskrp).^2;
         xilGG_nsn(iz,:) = imag(Yr1(:) + Yr2(:) + Yr3(:)) + real(Yr4(:) + Yr5(:));
+        fprintf('xill %e %e %e %e \n',xilLL(aa),xilLG(aa),xilGG(aa),xilGG_nsn(aa));
     end
 end
 r2=repmat(rad.*rad,lenz,1);

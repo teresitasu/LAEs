@@ -56,6 +56,9 @@ end
 for j = n/2+2:n
     if(lorder==0)
         Yk(1,j) = -Yk(1,n+2-j);
+        %if (j == n/2+2) | (j == n)
+        %    fprintf("n %i %i %i %e\n",n,j,n+2-j,Yk(1,j));
+        %end
     end
     if(lorder==2)
         Yk(1,j) = -Yk(1,n+2-j);
