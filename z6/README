@@ -1,0 +1,17 @@
+To run:
+
+0. Subdirectory requires EmissMG.mat, tkO3111L6889h6766N2242_eh_PLANCK18.dat, and
+LyASolvedGammakCorrAsympApprox_Run.m, LyALAEPklComps_Run.m, LyALAEXilfftComps_Run.m and LyALAEXiangComps_Run.m.
+
+1a. Run LyASolvedGammakCorrAsympApprox_Run.m
+1b. Copy output LyASolvedGammakCorrAAL_*.mat file to LyASolvedGammakCorr.mat.
+
+2a. Run LyALAEPklComps_Run.m
+2b. Copy output LyALAEPklAALComps_*.mat file to LyALAEPklComps.mat
+
+3a. Run LyALAEXilfftComps_Run.m
+3b. Copy output LyALAEXilfftAALComps_*.mat file to LyALAEXilfftComps.mat
+
+4a. Run LyALAEXiangComps_Run.m
+
+(Re-ran with fixed LyALAEXiangComps.m after 17 Jan 2022 fix.)
