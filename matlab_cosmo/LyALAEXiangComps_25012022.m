@@ -94,6 +94,7 @@ for iz = 1:lenz
       if(igl ==3) 
           fprintf('L4 %f %f\n',L2(aa),L4(aa));
       end
+      fprintf('%i %i\n',iuth(1),iuth(lenmth));
       xiaLL(iz,1:lenmth) = xiaLL(iz,1:lenmth) + glwt(igl)*(r2xi0LL(iz,iuth) + L2.*r2xi2LL(iz,iuth) + ...
           L4.*r2xi4LL(iz,iuth))./ r2(iuth);
       %      xiaLL(iz,1:lenmth) = xiaLL(iz,1:lenmth)./ r2(iuth);
@@ -107,7 +108,7 @@ for iz = 1:lenz
           (r2xi0GG_nsn(iz,iuth) + L2.*r2xi2GG_nsn(iz,iuth) + L4.*r2xi4GG_nsn(iz,iuth))./ r2(iuth);
       %      xiaGG_nsn(iz,1:lenmth) = xiaGG_nsn(iz,1:lenmth)./ r2(iuth);
 
-      fprintf('xia %f %f\n',L2(aa),L4(aa));
+      %fprintf('xia %f %f\n',L2(aa),L4(aa));
   end
   clear thetar;
   clear thetas;

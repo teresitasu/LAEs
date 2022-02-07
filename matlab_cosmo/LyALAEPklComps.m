@@ -61,7 +61,7 @@ if(exist('LyASolvedGammaCorrAAL_W14B21_bG3_tG100_tQ1_z6.0.out')==2)
   data_t = load('LyASolvedGammaCorrAAL_W14B21_bG3_tG100_tQ1_z6.0.out');
   fk = transpose(data_t(:,1)); % co lumn 1 of the data text file is assigned the variable x
   dGammakCorr_nsn = transpose(data_t(:,3)); % column 2 is assigned the variable y
-  dGammakCorr = transpose(data_t(:,4));
+  dGammakCorr = transpose(data_t(:,2));
   PS = transpose(data_t(:,5));
   
   %data_t = load('cdenPowsp_omm_0_3_omv_0_7_ombh2_0_0_h_0_7_an_1_0_s8_0_8_ips_3.out');
@@ -86,6 +86,7 @@ fprintf('aexp_flip %f \n',aexp_flip');
 gg = fliplr(gg_flip);
 gv = fliplr(gv_flip);
 fprintf('gg %f, gv %f %f\n',gg,gv);
+fprintf('Hfac %f,\n',Hfac);
 deltk = gg'*deltk_0/ gg_0;
 Pk = deltk.*deltk;
 ddGammak_nsn = deltk.*dGammak_nsn;
@@ -95,7 +96,10 @@ betafac = repmat(beta',1,lenk);
 beta2fac = repmat(beta2',1,lenk);
 PkLAE = repmat((b_LAE - tau_eff.*b_delta)',1,lenk).*deltk;
 PkLAE = PkLAE.*PkLAE;
+fprintf('taus %f,\n',(b_LAE - tau_eff.*b_delta).*(tau_eff.*b_Gamma));
 PkLAEG = -2*repmat(((b_LAE - tau_eff.*b_delta).*(tau_eff.*b_Gamma))',1,lenk).*ddGammak_nsn;
+fprintf('taus %f,\n',PkLAEG(10));
+
 if(lorder==0)
   PkLAEl = (1 + betafac/ 1.5 + beta2fac/ 5.).*PkLAE;
   PkLAEGl = (1 + betafac/ 3.).*PkLAEG;

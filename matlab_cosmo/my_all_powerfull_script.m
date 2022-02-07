@@ -98,6 +98,11 @@ save('LyALAEXilfftComps.mat','zred_out','r', 'fk','Pk','PkLAE0','PkLAEG0','Pk0_L
 xia_nsn = xiaLL + xiaLG + xiaGG_nsn;
 xia = xiaLL + xiaLG + xiaGG;
 
+Aout = [theta',xiaLL',xiaLG',xiaGG_nsn',xiaGG',xia_nsn',xia'];
+fido = fopen('my_file_xiang.txt','w');
+fprintf(fido,'%8.6f %16.6e %16.6e %16.6e %16.6e %16.6e %16.6e\n',Aout');
+fclose(fido);
+  
 ss = 1;
 theta(ss),xiaLL(ss),xiaLG(ss),xiaGG_nsn(ss),xiaGG(ss),xia_nsn(ss),xia(ss);
 
