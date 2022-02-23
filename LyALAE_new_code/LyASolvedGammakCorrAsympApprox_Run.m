@@ -98,6 +98,7 @@ lzred_out = length(zred_out);
 %fk = 10.^linspace(-4,3,351); %hiresk
 %fk = 10.^linspace(-4,3,751); %hiresk2
 fk = 10.^linspace(-4,3,701); %hiresk2
+
 [pnorm,Gamma,Tk] = cdenPowspInitFile(om_m,om_v,om_bh2,h,an,sigma8, ...
                                      ips,Tk_file,nrows);
 PS = cdenPowsp(fk,pnorm,Gamma,an,Tk,ips);
@@ -106,6 +107,7 @@ dGammakCorr = zeros(lzred_out,lenfk);
 dGammakCorr_nsn = zeros(lzred_out,lenfk);
 dGammakCorr_sn = zeros(lzred_out,lenfk);
 [neff_Q,avgL_Q,avgL2_Q] = LyAGetNeffQSO_KWH19(zred_out,M1450min,M1450max,iQmod);
+
 for ik = 1:lenfk
     k = fk(ik)
     Pk = PS(ik);
@@ -133,6 +135,7 @@ for ik = 1:lenfk
 %    if(ik==81)
 %      save(matoutfile, 'k', 'Pk', 'e24', 'tau_Q', 'bG', 'tau_G', 'zred', 'dGammaCorr', 'dGammaCorr_nsn', 'dGammaCorr_sn','Gamma', 'aeff_d', 'aeff_LLS', 'S');
 %    end
+    
     for iz = 1:lzred_out
       masku = find(zred>=zred_out(iz));
       izo = masku(1);

@@ -39,6 +39,7 @@ Phi = LyAGetQSOLF_KWH19(M1450,zred,imod);
 % Convert to luminosity at Lyman edge (KWH19 Eqs.(20) and (21))
 LumL = ((912/1450)^0.61)*10.^(-0.4*(M1450 - 51.60));
 LumLmat = repmat(LumL',1,lenz);
+%size(LumLmat)
 avgL = (LumLmat.*Phi)'*dM1450';
 avgL2 = (LumLmat.*LumLmat.*Phi)'*dM1450';
 neff = (avgL.*avgL).*(1./ avgL2);
