@@ -135,7 +135,7 @@ for ik = 1:lenfk
 %    if(ik==81)
 %      save(matoutfile, 'k', 'Pk', 'e24', 'tau_Q', 'bG', 'tau_G', 'zred', 'dGammaCorr', 'dGammaCorr_nsn', 'dGammaCorr_sn','Gamma', 'aeff_d', 'aeff_LLS', 'S');
 %    end
-    stop
+    
     for iz = 1:lzred_out
       masku = find(zred>=zred_out(iz));
       izo = masku(1);

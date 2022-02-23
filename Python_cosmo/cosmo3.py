@@ -1264,22 +1264,11 @@ def LyASolvedGammakCorr(zred,Gammai=None,aj=None,aS=None,
                     bLLS=bLLS,tau_Q=tau_Q,M1450min=M1450min,
                     M1450max=M1450max,bG=bG,tau_G=tau_G,
                     e24=e24)
-        #print(zredout)
-        #print(dGammaCorr[masku][0])
-        #print(dGammaCorr_sn[0])
         masku = zredout >= zred
-        #print(zredout[masku])
-        
-        #dGammaCorr[masku]
 
         dkCorr.append(dGammaCorr[masku][0])
         dkCorr_nsn.append(dGammaCorr_nsn[masku][0])
         dkCorr_sn.append(dGammaCorr_sn[masku][0])
-
-        #izo = masku(1);
-        #dGammakCorr(iz,ik) = dGammaCorr(izo,izo);
-        #dGammakCorr_nsn(iz,ik) = dGammaCorr_nsn(izo,izo);
-        #dGammakCorr_sn(iz,ik) = dGammaCorr_sn(izo,izo);
         if ctr%10 == 0: print(ctr,fk.size,k)
         ctr +=1
 
