@@ -35,8 +35,10 @@ zp1 = 1 + zred;
 LumLs = 1.80e28;
 alpha = -1.87 + 0.1*(6 - zred);
 alpha = max(alpha,-1.9);
+%fprintf('%f %f %f %f\n',alpha+2,gamma(alpha+2),lmin,gammainc(lmin,alpha+2,'upper'))
 g2 = gamma(alpha+2).*gammainc(lmin,alpha+2,'upper');
 g3 = gamma(alpha+3).*gammainc(lmin,alpha+3,'upper');
+%fprintf('%f %f\n',g2,g3)
 coeff1 = 2.5*log10(e)*g2.*LumLs;
 coeff2 = 2.5*log10(e)*g3.*LumLs.*LumLs;
 phis = 0.44e-3*10.^(0.28*(6 - zred));

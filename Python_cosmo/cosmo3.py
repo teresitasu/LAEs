@@ -1,8 +1,13 @@
 import numpy as np
-from scipy import interpolate
+#from scipy import interpolate
+from scipy.interpolate import PchipInterpolator as pchip
+from scipy.interpolate import interp1d
 import scipy.integrate as integrate
 import pandas as pd
-from scipy.special import gamma,gammaincc
+from scipy.special import gamma,gammaincc,gammainc,gammainccinv,gammaincinv
+
+
+
 
 # Define Cosmology
 om_m = 0.3111
@@ -14,6 +19,8 @@ an = 0.9665
 sigma8 = 0.8102
 
 omega = [om_m, om_v, 0., om_bh2]
+
+fk = np.logspace(-4.0,3.0,701)
 
 #Columns: (1) k (h/Mpc) (2) PGammaGamma (total) (3) PGammaGamma_nsn (non-shotnoise term) (4) PGammaGamma_sn (shotnoise term) (5) PS (dm power spectrum at z = 0)
 fk,dGammakCorr,dGammakCorr_nsn,PGG,PS = np.loadtxt('./LyASolvedGammakCorrAAL_W14B21mfp_QSOLFKWH19_hiresk2_lgk_m4t3_aj_1.8_aS_0.8_ab_1.0_zi_8.0_zf_4.8_bf_0.0_bet_1.2_tf_1.0_iQ_3.0_bj_1.0_bnH_1.0_baA_m0.5_bLLS_1.0_tQ_10.0_bG_3.0_tG_100.0_zout_6.0.out',unpack = True)
@@ -68,7 +75,6 @@ def cdenGrowthFunc(aexp):
 
 
 def LyATransXilInt_fft(fk,fkk,Pk_alpha_z,lorder=0,debug = False):
-    from scipy.interpolate import PchipInterpolator as pchip
 
     #Pk_alpha_z_arr = np.interp(fkk,fk,Pk_alpha_z)
     pk_interp = pchip(fk,Pk_alpha_z, axis=0, extrapolate=True)
@@ -614,13 +620,19 @@ def LyAGetNeffGal(zred,lmin):
      HISTORY:
       22 12 17 Creation date.
     '''
+
+
     e = np.exp(1.0)
     zp1 = 1.0 + zred
     LumLs = 1.80e28
     alpha = -1.87 + 0.1 * (6.0 - zred)
-    alpha = np.max([alpha,-1.9])
-    g2 = gamma(alpha+2.0) * gammaincc(lmin,alpha+2.0)
-    g3 = gamma(alpha+3.0) * gammaincc(lmin,alpha+3.0)
+    #print(alpha)
+    ss = alpha <= -1.9
+    alpha[ss] = -1.9
+    #alpha = np.max([alpha,-1.9],axis=-)
+    g2 = gamma(alpha+2.0) * gammaincc(alpha+2.0,lmin)
+    g3 = gamma(alpha+3.0) * gammaincc(alpha+3.0,lmin)
+    #print(g2)
     coeff1 = 2.5 * np.log10(e)*g2*LumLs
     coeff2 = 2.5 * np.log10(e)*g3*LumLs**2
     phis = 0.44e-3 * 10**(0.28*(6.0 - zred))
@@ -660,18 +672,617 @@ def LyAGetNeffQSO_KWH19(zred,M1450min,M1450max,imod):
       11 09 19 Creation date. (After LyAGetNeffQSO.m)
     '''
     lenM = 1001
+    lenz = len(zred)
     M1450 = np.linspace(M1450min,M1450max,lenM)
     ### ! Missing here next two lines!
     dM1450 = np.gradient(M1450)
     Phi = LyAGetQSOLF_KWH19(M1450,zred,imod)
     # Convert to luminosity at Lyman edge (KWH19 Eqs.(20) and (21)
     LumL = ((912./1450.)**0.61)*10**(-0.4*(M1450 - 51.60))
-    #LumLmat = np.ones(LumL,1,lenz)
-    avgL = (Lum * Phi) * dM1450
-    avgL2 = (LumL * LumL * Phi) * dM1450
+    #print(Phi.shape,LumL.shape)
+    LumLmat = np.ones((lenz,lenM))* (LumL)
+    #print(LumL)
+    #print(np.transpose(LumLmat) * (LumL))
+    #print((np.transpose(LumLmat) * Phi).shape,dM1450.shape)
+    avgL = np.dot(LumLmat * np.transpose(Phi), dM1450)
+    avgL2 = np.dot((LumLmat * LumLmat) * np.transpose(Phi), dM1450)
     neff = (avgL * avgL)*(1./ avgL2)
     #avgL = avgL
     #avgL2 = avgL2'
     #neff = neff'
     return neff, avgL, avgL2
+
+def LyAGetQSOLF_KWH19(M1450,zred,imod):
+    '''
+     Returns QSO luminosity function
+     Uses Kulkarni et al. (2019) MNRAS 488:1035
+
+     ARGUMENTS
+     M1450  Absolute magnitude at 1450A
+     zred     List of redshifts (CURRENTLY FOR A SINGLE REDSHIFT)
+     imod    1, 2 or 3
+
+     RETURNS
+      Phi       2D array containing Phi(M1450,z) (row,col)
+                 (Phi(M1450,z)dM1450 = comoving number density in Mpc^-3 of QSOs at z
+               with M1450 absolute magnitude between M1450 and M1450 + dM1450)
+      
+
+     COMPATIBILITY: Matlab, Octave
+
+     REQUIREMENTS
+
+
+     AUTHOR: Avery Meiksin
+
+     HISTORY:
+      11 09 19 Creation date. (From LyAGetQSOLF.m)
+    '''
+    #M1450 = M1450
+    lenM = len(M1450)
+    lenz = len(zred)
+    M1450mat = np.ones((lenz,lenM))*M1450
+    Phi = np.zeros((lenM,lenz))
+    zp1 = 1 + zred
+    # Define Chebyshev poloynomials of first kind, orders 0 to 3
+    T0 = 1.0
+    T1 = zp1
+    T2 = 2*zp1*zp1 - 1.0
+    T3 = 4*zp1*zp1*zp1 - 3.0*zp1
+    if(imod<1) or (imod>3):
+        print('LyAGetQSOLF_KWH19: invalid imod')
+        return None
+    if (imod == 1):
+        c0 = np.array([-7.798,1.128,-0.120])
+        c1 = np.array([-17.163,-5.512,0.593,-0.024])
+        c2 = np.array([-3.223,-0.258])
+        c3 = np.array([-2.312,0.559,3.773,141.884,-0.171])
+        phis = 10**(np.dot(c0,[T0,T1,T2]))
+        Ms = np.dot(c1,[T0,T1,T2,T3])
+        Msmat = np.ones(lenM)*Ms
+        alpha = np.dot(c2,[T0,T1])
+        zeta = np.log10(zp1/ (1.0 + c3[2]));
+        beta = c3[0] + c3[1]/ (10**(c3[3]*zeta) + 10**(c3[4]*zeta))
+        alphap1 = 1 + alpha
+        betap1 = 1 + beta
+        x = 10**(0.4*(np.transpose(M1450mat) - Msmat))
+        phismat = np.ones((lenM,lenz))*phis
+        alphap1mat = np.ones((lenM,lenz))*alphap1
+        betap1mat = np.ones((lenM,lenz))*betap1
+        Phi = phismat/(x**alphap1mat + x**betap1mat)
+
+    if (imod==2):
+        c0 = np.array([-7.432,0.953,-0.112])
+        c1 = np.array([-15.412,-6.869,0.778,-0.032])
+        c2 = np.array([-2.959,-0.351])
+        c3 = np.array([-2.264,0.530,2.379,12.527,-0.229])
+        phis = 10**(np.dot(c0,[T0,T1,T2]))
+        Ms = np.dot(c1,[T0,T1,T2,T3])
+        Msmat = np.ones(lenM)*Ms
+        alpha = np.dot(c2,[T0,T1])
+        zeta = np.log10(zp1/ (1 + c3[2]))
+        beta = c3[0] + c3[1]/ (10**(c3[3]*zeta) + 10**(c3[4]*zeta))
+        alphap1 = 1 + alpha
+        betap1 = 1 + beta
+        x = 10**(0.4*(np.transpose(M1450mat) - Msmat))
+        phismat = np.ones((lenM,lenz))*phis
+        alphap1mat = np.ones((lenM,lenz))*alphap1
+        betap1mat = np.ones((lenM,lenz))*betap1
+        Phi = phismat/(x**alphap1mat + x**betap1mat)
+    if (imod==3):
+        c0 = np.array([-6.942,0.629,-0.086])
+        c1 = np.array([-15.038,-7.046,0.772,-0.030])
+        c2 = np.array([-2.888,-0.383])
+        c3 = np.array([-1.602,-0.082])
+        phis = 10**(np.dot(c0,np.array([T0,T1,T2])))
+        Ms = np.dot(c1,np.array([T0,T1,T2,T3]))
+        #print(Ms)
+        Msmat = np.ones((lenM,lenz))*Ms
+        alpha = np.dot(c2,np.array([T0,T1]))
+        beta = c3[0] + c3[1]*zp1
+        alphap1 = 1.0 + alpha
+        betap1 = 1.0 + beta
+        #print(M1450mat.shape,Msmat.shape)
+        x = 10**(0.4*(np.transpose(M1450mat) - Msmat))
+        phismat = np.ones((lenM,lenz))*phis
+        alphap1mat = np.ones((lenM,lenz))*alphap1
+        betap1mat = np.ones((lenM,lenz))*betap1
+        #print(phismat.shape,alphap1mat.shape,betap1mat.shape)
+        Phi = phismat/(x**alphap1mat + x**betap1mat)
+    return Phi
+
+def LyASolvedGammakCorrAsymptoticApprox(k,Pk,Gammai=None,aj=None,aS=None,
+                            ab=None,zi=None,
+                            zf=None,bfrac=None,
+                            bet=None,cfrac=None,iQmod=None,
+                            bj=None,bnH=None,baA=None,
+                            bLLS=None,tau_Q=None,M1450min=None,
+                            M1450max=None,bG=None,tau_G=None,
+                            e24=None):
+    '''
+     Returns deltaGammaCorr based on asympytotic limits alone: power spectrum of
+     photoionization rate Gamma fluctuations, proportional to dark matter density
+     power spectrum. Adopts conventional units of the dark matter power spectrum
+     as comoving volume units (Mpc/h)^3. Allows for QSO bias from
+     Laurent et al. (2017).
+
+     ARGUMENTS
+     Gammai      Initial guess on ionization rate (for LyASolveEmissMG.m)
+     aj          Source comoving emissivity spectral power-law exponent
+     aS          Source comoving emissivity evolution power-law exponent
+     ab          Value of a_b for bias factor evolution bj ~ (1+z)^ab;
+                    compute internally for ab < 0; set ab = 1 for high redshift (large aeff_LLS)
+     om_m        Omega_m for all matter
+     h           H0/ (100 km/s/Mpc)
+     zi          Ionization redshift
+     zf          Final redshift
+     k           Single comoving wavenumber (h/ Mpc)
+     Pk          Value of power spectrum P(k) at k at z = 0 (comoving Mpc^3/ h^3)
+     bfrac       Fraction of baryons in diffuse component of IGM
+     bet         Exponent for power law HI distribution of Lyman Limits Systems
+     cfrac       Fraction of intergalactic attenuation due to Lyman Limit Systems
+     iQmod       QSO evolution model
+     bj          Source bias (set to <=0 to override bQ and bG and use -bj instead)
+     bnH         Hydrogen density bias
+     baA         Radiative recombination rate bias
+     bLLS        Bias factor for LLS contribution to attenuation
+     tau_Q       Lifetime of QSO sources (Myr)
+     lgQbolmin   Log10 minimum QSO bolometric luminosity
+     lgQbolmax   Log10 maximum QSO bolometric luminosity
+     bG          Galaxy bias factor
+     tau_G       Lifetime of galaxy sources (Myr)                          %
+
+     RETURNS
+      e24            Comoving emissivity coefficient (1e24 erg/s/Hz/Mpc^3)
+      zred           Array of redshifts from zf to zi
+      dGammaCorr     Power spectrum of fluctuation in photoionization rate Gamma from zf to zi
+      dGammaCorr_nsn Power spectrum of fluctuation in photoionization rate Gamma from zf to zi without shotnoise
+      dGammaCorr_sn  Power spectrum of fluctuation in photoionization rate Gamma from zf to zi for shotnoise term alone
+      Gamma          Mean metagalactic photoionization rate
+      aeff_d         Array of effective diffuse attenuation coefficient, matching zred array
+      aeff_LLS       Array of effective LLS attenuation coefficient, matching zred array
+      S              Source q*bj - (2*bnH + baA) array, matching zred array
+
+     COMPATIBILITY: Matlab, Octave
+
+
+     AUTHOR: Avery Meiksin
+
+     HISTORY:
+      04 06 18 Creation date. (Adapted from LyASolvedGammakCorrSS.m.)
+      05 07 18 Add lgQbolmin and lgQbolmax arguments
+      15 08 18 Modify for phi .ne. 1
+      24 08 18 Add factor convcomov to convert 1/ neff to comoving (Mpc/ h)^3
+      04 09 18 Add option for Lorentzian power spectrum approximation
+      21 09 18 Fix faulty denom_sn; allow for evolution in comoving neff through alpha_n
+      19 11 21 Fix asymptotic values to steady-state case for high k (for ab = 1) and low k
+      02 12 21 Modified to correct galaxy contribution to match required e24
+    '''
+
+
+
+    #[neff_Q,avgL_Q,avgL2_Q] = LyAGetNeffQSO_KWH19(zred_out,M1450min,M1450max,iQmod);
+    if Gammai == None:
+        Gammai = 0.249e-12
+    if aj == None:
+        aj = 1.8
+    if aS == None:
+        aS = 0.8
+    if ab == None:
+        # turn off delta_DM evolution for high z (high chiLLS)
+        ab = 1 
+    if zi == None:
+        zi = 8.0
+    if zf == None:
+        zf = 4.8
+    if bfrac == None:
+        bfrac = 0.0
+    if bet == None:
+        bet = 1.2
+    if cfrac == None:
+        cfrac = 1.0
+    if iQmod == None:
+        iQmod = 3
+    if bj == None:
+        bj = 1.0
+    if bnH == None:
+        bnH = 1.0
+    if baA == None:
+        baA = -0.5
+    if bLLS == None:
+        bLLS = 1.0
+    if tau_Q == None:
+        tau_Q = 10.0
+    if M1450min == None:
+        M1450min = -31.0
+    if M1450max == None:
+        M1450max = -21.0
+    if bG == None:
+        bG = 3.0
+    if tau_G == None:
+        tau_G = 100.0
+    if e24 == None:
+        e24 = 29.329250318837154
+
+    mpc = 3.0856e24
+    h_LF = 0.7
+    lmin = 0.01
+    bGamLLS = 1.0 - bet
+    om_v = 1.0 - om_m
+    deltk_0 = Pk**0.5
+    gg_0,ll = cdenGrowth(1.0)
+    #print(gg_0)
+    ##### MISSING LyASolveEmissMG
+    #flags = True
+    Gamma_MG,xHI,aeffd_MG,aeffLLS_MG,otsfac_MG,zred_MG = np.loadtxt('EmissMG.txt',unpack=True)
+    '''
+    if flags:
+        print('Missing')
+    else:
+        zred_MG = np.linspace(zf,zi,lzred_MG)
+        zp1_MG = 1.0 + zred_MG
+        Gamma_i = Gammai * np.ones(1.0,lzred_MG)
+        e24,Gamma_MG,xHI,aeffd_MG,aeffLLS_MG,otsfac_MG,err = LyASolveEmissMG(Gamma_i,aj,aS,om_m,om_v,h,bfrac,bet,cfrac,zred_MG)
+    '''
+    ##### MISSING LyASolveEmissMG
+
+    aeff_MG = aeffd_MG + aeffLLS_MG
+    zred = zred_MG
+    lzred = len(zred)
+
+    zp1 = 1.0 + zred
+    zp1_3 = zp1**3
+    #factor to convert shot noise from 1/ neff to comoving (Mpc/h)^3
+    convcomov = h_LF**3
+
+    aexp_flip = 1.0/ zp1
+    gg,ll = cdenGrowth(aexp_flip[::-1])
+    deltk = np.array(gg)[::-1]*deltk_0/ gg_0
+    bQ = 0.278*zp1*zp1 + 0.57 #from BOSS
+    Gamma = Gamma_MG
+    aeff = aeff_MG
+    aeff_d = aeffd_MG
+    aeff_LLS = aeffLLS_MG
+    aeff_wtot = aeff_d - (bGamLLS * aeff_LLS)
+    otsfac = otsfac_MG
+    Hdc = h*(om_m*zp1**3 +om_v)**0.5/(2.99792458e3*mpc)
+    aTot = aeff + Hdc * otsfac
+
+    neff_Q,avgL_Q,avgL2_Q = LyAGetNeffQSO_KWH19(zred,M1450min,M1450max,iQmod)
+    eL24 = e24/ zp1**aS
+    #print('bG',bG)
+    if (bG > 0):
+        neff_G,avgL_G,avgL2_G = LyAGetNeffGal(zred,lmin)
+        fixfescG = (1e24*eL24 - avgL_Q)/ avgL_G
+        avgL_G = fixfescG*avgL_G
+        avgL2_G = fixfescG*fixfescG*avgL2_G
+    else:
+        fixQ = 1e24*eL24/ avgL_Q
+        avgL_Q = fixQ*avgL_Q
+        avgL2_Q = fixQ*fixQ*avgL2_Q
+
+    avgL = eL24*1e24
+    if (bj <= 0):
+        bj = -bj
+    else:
+        if (bG > 0):
+            bj = (bQ*avgL_Q + bG*avgL_G)/ avgL
+        else:
+            bj = bQ
+            avgL = eL24*1e24
+    q = 0.999e-16 * e24 * zp1**(3 - aS)/ (3 + aj)
+    shot = np.zeros(lzred)
+    shot_Q = np.zeros(lzred)
+    avgavgL2_Q = np.zeros(lzred)
+    if (bG > 0):
+        shot_G = np.zeros(lzred)
+        avgavgL2_G = np.zeros(lzred)
+
+    jdf = q/ (Gamma*mpc)
+    if ((cfrac < 1.0) or (abs(bGamLLS) > 0)):
+        q = jdf/ aeff_wtot
+        S = bj*q - (2.0*bnH + baA)*(aeff_d/ aeff_wtot) - \
+                     bLLS*(aeff_LLS/ aeff_wtot)
+    else:
+        q = jdf/ aeff
+        S = bj*q - bLLS*(aeff_LLS/ aeff)
+    S = S * deltk
+
+    if (ab < 0.0):
+        ab = np.gradient(np.log(bj))/ np.gradient(np.log(zp1))
+    
+    chiH = aeff/ Hdc
+    chiH_d = aeff_d/ Hdc
+    chiH_LLS = aeff_LLS/ Hdc
+    #chiHb = chiH + otsfac #otsfac is beta_H
+    chiHb = jdf/ Hdc #phi*(chi+zeta)
+    chiHdL = chiH_d - bGamLLS*chiH_LLS
+    gamH = chiHb - ab + 0.5
+    kap = (k * h )/ (mpc*Hdc)
+    #zp1i = zp1(lzred)
+    #xi = zp1./ zp1i;
+    # kap -> 0 limit
+    denom = bGamLLS*chiH + chiHb + 1.0 - ab #otsfac is beta_H
+    pi2 = np.pi / 2.0
+    #Use Lorentzian formulation for non-shotnoise signal
+    kaps = (pi2/ zp1) * denom
+    fkap = -chiHdL/ (denom*(1.0 + (kap/ kaps)**2)**0.5)
+    S = S*fkap
+    S2ns = S**2
+    # Add shotnoise term in E-deS limit
+    ############
+    ##Use Lorentzian formulation for shot noise
+    #Use extended Lorentzian formulation for shot noise        
+    if (bG > 0):
+      neff = (avgL*avgL)/ (avgL2_Q + avgL2_G)
+    else:
+      neff = (avgL*avgL)/ avgL2_Q
+    
+    # comoving neff evolution exponent
+    alpha_n = -np.gradient(np.log(neff))/ np.gradient(np.log(zp1))
+    HMyr = 3.15e20*h*(om_m*zp1**3+om_v)**0.5/ mpc
+    tau_S = tau_Q ### assume tau_Q dominates
+    denom_sn = (1.0 - bet)*chiH + chiHb + 0.75 - 0.5*alpha_n
+    # Use sliding scale-length
+    kaps_sn = 2.0 * denom_sn/ (HMyr*tau_S) - \
+            ((chiHb - 0.5)/(pi2*pi2) + (1.0 - bet)*chiH)**2
+    kaps_sn = (pi2/ zp1)* kaps_sn**0.5
+    kaps_sn = kaps_sn/ (1.0 + pi2*((chiHb - 0.5)/(pi2*pi2) +\
+             (1.0 - bet)*chiH)/ (kap*zp1))
+    AA = chiHb*chiHb
+    AA = AA/ (2.0 * denom_sn/ (HMyr*tau_S) - \
+             ((chiHb - 0.5)/(pi2*pi2)+(1.0 - bet)*chiH)**2)
+    fkap_sn = (AA/ (1.0 + (kap/ kaps_sn)**2))**0.5
+    S_sn = (convcomov**0.5)*fkap_sn/ neff**0.5
+    shot = S_sn**2
+    S2 = S2ns + shot
+    dGammaCorr = S2
+    dGammaCorr_nsn = S2ns
+    dGammaCorr_sn = shot
+
+
+    return e24,zred,dGammaCorr,dGammaCorr_nsn,dGammaCorr_sn,Gamma,aeff_d,aeff_LLS,S
+
+
+def cdenPowspInitFile(ips=3,Tk_file=None):
+
+    if Tk_file == None:
+        Tk_file = './tkO3111L6889h6766N2242_eh_PLANCK18.dat'
+    ng = 1e6
+    boxsize = 1000
+    tol = 1e-6
+    fkl = 2*np.pi/ boxsize
+    fku = 0.5*ng*fkl
+    lgfkl = np.log(fkl)
+    lgfku = np.log(fku)
+    #Uses Bunn & White (1997) COBE normalization.
+    tilt = an - 1.0
+    om_b = om_bh2/ (h*h)
+    if (om_v > 0.0):
+        dh=1.94e-5*(om_m**(-0.785-0.05*np.log(om_m)))*np.exp(-0.95*tilt-0.169*tilt*tilt)
+    else:
+        dh=1.95e-5*(om_m**(-0.35-0.19*np.log(om_m)-0.17*tilt))*np.exp(-tilt-0.14*tilt*tilt)
+
+    pnorm = 2.0*np.pi*np.pi*dh*dh*(2997.9)**(3.0 + an)
+    Gamma = om_m*h/ (np.exp(om_b*(1.0 + 1.0/ om_m)))
+    if (ips == 3):
+        Tk = np.loadtxt(Tk_file)
+        #fk = Tk_table[:,0]
+        #fkmin = np.min(Tk.fk)
+        #fkmax = np.max(Tk.fk)
+        #tk = Tk_table[:,1]
+    else:
+        Tk = 0
+    print('Bunn & White COBE pnorm: {:.5e}'.format(pnorm))
+    # Now normalize to desired sigma8.
+    xf = 8.0
+    ismooth = 1 #spherical top hat
+    ## pnorm,Gamma,an,Tk,xf,ismooth,ips
+    sigma8_BW,garbage = integrate.quad(cdenFNorm,lgfkl,lgfku,
+            args=(pnorm,Gamma,Tk,xf,ismooth,ips),epsrel=tol)
+    #sigma8_BW = quad(@(u)cdenFNorm(u,pnorm,Gamma,an,Tk,xf,ismooth,ips),lgfkl,lgfku,tol)
+    #% TEST for linear integration
+    #fk=linspace(lgfkl,lgfku,1000000);
+    #fk(1)
+    #fk(1000000)
+    #dk = (lgfku-lgfkl)/1000000;
+    #u = cdenFNorm(fk,pnorm,Gamma,an,Tk,xf,ismooth,ips);
+    #sigma8_BW = dk*trapz(u);
+    #%
+    sigma8_BW = sigma8_BW**0.5
+    pnorm = pnorm*(sigma8/ sigma8_BW)*(sigma8/ sigma8_BW)
+    
+    return pnorm, Gamma, Tk
+
+def cdenFNorm(lgfk,pnorm,Gamma,Tk,xf,ismooth,ips):
+    '''
+    ******************************************************
+     Computes normalization integrand for power spectrum.
+    
+     ARGUMENTS
+      lgfk       Array of (logarithmically-spaced) wavenumber.
+      pnorm      Normalization of matter power spectrum.
+      Gamma      Curvature of matter power spectrum.
+      an         Spectral index of matter power spectrum.
+      Tk         Transfer function for matter power spectrum.
+      xf         Filtering scale (inverse units of dlfkp).
+      ismooth    Method for smoothing fluctuations.
+      ips        Method of computing matter power spectrum.
+    
+     COMPATIBILITY: Matlab(?), Octave
+    
+     REQUIREMENTS:
+             cdenPowspInit.m, cdenPowsp.m
+    
+     AUTHOR: Avery Meiksin
+    
+     HISTORY:
+      19 04 16 Creation date. (After FNORM subfunction in lss/src/Delta2.f.)
+    
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    '''
+    fk = np.exp(lgfk)
+    #fk = lgfk; %TEST for linear integration
+    y = xf*fk
+    if (ismooth == 0):
+        W = 1.0
+    if (ismooth == 1):
+        W = 3.0*(np.sin(y) - y*np.cos(y))/ y**3
+    if (ismooth == 2):
+        W = 0.0
+        maskl = y < 10
+        W[maskl] = 1./ np.exp(y[maskl]**2)
+
+    if (ismooth == 3):
+        W = 1./ (1.0 + y**2)
+    PS = cdenPowsp(fk,pnorm,Gamma,Tk,ips)
+    return fk**3 * PS * W**2/ (2.0 * np.pi**2)
+
+
+def cdenPowsp(fk,pnorm,Gamma,Tk,ips):
+    '''
+    #********************
+    # Computes matter power spectrum.
+    # Assumes k in Tk file is in conventional comoving h/ Mpc.
+    # Conventionally pnorm is for P(k) in units (comoving Mpc/h)^3,
+    # so PS is returned in units (comoving Mpc/h)^3.
+    #
+    # ARGUMENTS
+    #  fkp        Array of wavenumbers.
+    #  pnorm      Normalization of power spectrum.
+    #  Gamma      Curvature of power spectrum.
+    #  an         Tilt of power spectrum.
+    #  Tk         Transfer function.
+    #  ips        Method for computing power spectrum.
+    #
+    # COMPATIBILITY: Matlab(?), Octave
+    #
+    # AUTHOR: Avery Meiksin
+    #
+    # HISTORY:
+    #  19 04 16 Creation date. (After lss/src/powsp.f.)
+    #
+    #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    '''
+    if (ips == 1):
+        # use B&E
+        a = 6.4/ Gamma
+        b = 3.0/ Gamma
+        c = 1.7/ Gamma
+        PS = 1.0 + (fk*(a + c*c*fk) + (b*fk)**1.5)**1.13
+        PS = pnorm*fk**an/ PS**(2./ 1.13)
+
+    if (ips == 2):
+        # use BBKS
+        q = fk/ Gamma
+        PS = 1.0 + q*(3.89+q*(16.1*2 + q* (5.46**3 + q * 6.71**4)))
+        PS = np.log(1. + 2.34*q)/ PS**0.25/ (2.34*q)
+        PS = pnorm * (fk**an) * PS**2
+
+    if(ips == 3):
+        ggg = interp1d(Tk[:,0],Tk[:,1],kind='cubic',fill_value="extrapolate")
+        tki = ggg(fk)
+        PS = pnorm*(fk**an)*tki*tki
+        PS = np.array(PS)
+        maskl = fk < np.min(Tk[:,0])
+        masku = fk > np.max(Tk[:,0])
+        q = fk[maskl]/ Gamma
+        PS[maskl] = 1.0 + q*(3.89+q*(16.1*16.1+q*(5.46*5.46*5.46+q*6.71*6.71*6.71*6.71)))
+        PS[maskl] = np.log(1. + 2.34*q)/ PS[maskl]**0.25/ (2.34*q)
+        PS[maskl] = pnorm*fk[maskl]**an*PS[maskl]*PS[maskl]
+    
+        q = fk[masku]/ Gamma
+        PS[masku] = 1.0 + q*(3.89+q*(16.1*16.1+q*(5.46*5.46*5.46+q*6.71*6.71*6.71*6.71)))
+        PS[masku] = np.log(1. + 2.34*q)/ PS[masku]**0.25/ (2.34*q)
+        PS[masku] = pnorm*fk[masku]**an*PS[masku]*PS[masku]
+    
+    return PS
+
+
+def LyASolvedGammakCorr(zred,Gammai=None,aj=None,aS=None,
+                    ab=None,zi=None,
+                    zf=None,bfrac=None,
+                    bet=None,cfrac=None,iQmod=None,
+                    bj=None,bnH=None,baA=None,
+                    bLLS=None,tau_Q=None,M1450min=None,
+                    M1450max=None,bG=None,tau_G=None,
+                    e24=None):
+
+    if Gammai == None:
+        Gammai = 0.249e-12
+    if aj == None:
+        aj = 1.8
+    if aS == None:
+        aS = 0.8
+    if ab == None:
+        # turn off delta_DM evolution for high z (high chiLLS)
+        ab = 1 
+    if zi == None:
+        zi = 8.0
+    if zf == None:
+        zf = 4.8
+    if bfrac == None:
+        bfrac = 0.0
+    if bet == None:
+        bet = 1.2
+    if cfrac == None:
+        cfrac = 1.0
+    if iQmod == None:
+        iQmod = 3
+    if bj == None:
+        bj = 1.0
+    if bnH == None:
+        bnH = 1.0
+    if baA == None:
+        baA = -0.5
+    if bLLS == None:
+        bLLS = 1.0
+    if tau_Q == None:
+        tau_Q = 10.0
+    if M1450min == None:
+        M1450min = -31.0
+    if M1450max == None:
+        M1450max = -21.0
+    if bG == None:
+        bG = 3.0
+    if tau_G == None:
+        tau_G = 100.0
+    if e24 == None:
+        e24 = 29.329250318837154
+
+    dkCorr = []
+    dkCorr_nsn = []
+    dkCorr_sn = []
+    ctr = 0
+    for k,Pk in zip(fk,PS):
+        e24,zredout,dGammaCorr,dGammaCorr_nsn,dGammaCorr_sn,Gamma,aeff_d,aeff_LLS,S = LyASolvedGammakCorrAsymptoticApprox(k,Pk,
+            Gammai=Gammai,aj=aj,aS=aS,
+                    ab=ab,zi=zi,
+                    zf=zf,bfrac=bfrac,
+                    bet=bet,cfrac=cfrac,iQmod=iQmod,
+                    bj=bj,bnH=bnH,baA=baA,
+                    bLLS=bLLS,tau_Q=tau_Q,M1450min=M1450min,
+                    M1450max=M1450max,bG=bG,tau_G=tau_G,
+                    e24=e24)
+        #print(zredout)
+        #print(dGammaCorr[masku][0])
+        #print(dGammaCorr_sn[0])
+        masku = zredout >= zred
+        #print(zredout[masku])
+        
+        #dGammaCorr[masku]
+
+        dkCorr.append(dGammaCorr[masku][0])
+        dkCorr_nsn.append(dGammaCorr_nsn[masku][0])
+        dkCorr_sn.append(dGammaCorr_sn[masku][0])
+
+        #izo = masku(1);
+        #dGammakCorr(iz,ik) = dGammaCorr(izo,izo);
+        #dGammakCorr_nsn(iz,ik) = dGammaCorr_nsn(izo,izo);
+        #dGammakCorr_sn(iz,ik) = dGammaCorr_sn(izo,izo);
+        if ctr%10 == 0: print(ctr,fk.size,k)
+        ctr +=1
+
+    return fk, np.array(dkCorr),np.array(dkCorr_nsn),np.array(dkCorr_sn),PS
+
 
